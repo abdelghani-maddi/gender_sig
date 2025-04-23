@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+df_oax_alpha.rds
+final_df_rtw.rds
+gender.rds
+oax_rtw_alpha.rds
+oax_rtw_alpha_disc.rds
+retraction_watch.csv
+rtw_oax.rds
