@@ -386,22 +386,15 @@ oax_rtw_alpha_disc_gender <- readRDS("oax_rtw_alpha_disc_gender.rds")
 
 ###
 
-corresp_rtw <- oax_rtw_alpha_disc_gender %>%
-  filter(bdd == "retractionwatch" 
-         & is_sorted_alphabetically == TRUE
-         & n_authors > 2) %>%
-  select(id, bdd, gender_corresponding) %>%
-  unique()
-
-corresp_oax <- oax_rtw_alpha_disc_gender %>%
-  filter(bdd == "openalex") %>%
-  select(id, bdd, gender_corresponding) %>%
-  unique()
-
 #===================================
 # Table info corresp + First / Last
 #===================================
 
+######################################
+######################################
+# Abalyse des données -----
+######################################
+######################################
 
 library(dplyr)
 
@@ -454,29 +447,34 @@ config_ratios <- config_props %>%
     ratio_rw_oa = retractionwatch / openalex
   )
 
-######################################
-######################################
-# Abalyse des données -----
-######################################
-######################################
+#========================================
+#========================================
 
 
-#===================================
-# Pratiques de signature selon les disciplines
-#===================================
+#========================================
+#========================================
 
 
+### toutes disciplines
+# 1. Calculer les proportions dans chaque base (RW et OA)
+gender_corresponding <- oax_rtw_alpha_disc_gender %>%
+  filter(!is.na(gender_corresponding)) %>%
+  group_by(gender_corresponding, bdd, is_sorted_alphabetically) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(bdd, is_sorted_alphabetically) %>%
+  mutate(prop = n / sum(n)) %>%
+  ungroup()
+write.xlsx(gender_corresponding, "gender_corresponding.xlsx")
 
-#===================================
-# Doubles ratio sur les rétractation
-#===================================
+
+# 2. Reformater pour calculer le ratio RW/OA
+corresp_ratios <- gender_corresponding %>%
+  select(gender_corresponding, is_sorted_alphabetically, bdd, prop) %>%
+  pivot_wider(names_from = bdd, values_from = prop) %>%
+  mutate(
+    ratio_rw_oa = retractionwatch / openalex
+  )
+
+write.xlsx(corresp_ratios, "corresp_ratios.xlsx")
 
 
-#===================================
-# Raisons de rétractation
-#===================================
-
-
-#===================================
-# 
-#===================================
