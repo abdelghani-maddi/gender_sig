@@ -423,6 +423,8 @@ config_props <- oax_rtw_alpha_disc_gender %>%
   group_by(bdd, is_sorted_alphabetically) %>%
   mutate(prop = n / sum(n)) %>%
   ungroup()
+write.xlsx(config_props, "config_props.xlsx")
+
 
 # 2. Reformater pour calculer le ratio RW/OA
 config_ratios <- config_props %>%
