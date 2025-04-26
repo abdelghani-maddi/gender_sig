@@ -477,4 +477,82 @@ corresp_ratios <- gender_corresponding %>%
 
 write.xlsx(corresp_ratios, "corresp_ratios.xlsx")
 
+#========================================
+#========================================
 
+# Raisons de rétractation
+
+#========================================
+#========================================
+
+rtw_reasons_long <- rtw %>%
+  select(Record.ID, OriginalPaperDOI, Reason) %>%
+  # Séparer les raisons
+  separate_rows(Reason, sep = ";") %>%
+  # Nettoyer chaque raison
+  mutate(
+    Reason = str_remove_all(Reason, "[^[:alnum:] /&'-]"), # Garde lettres, chiffres, /, &, ', -
+    Reason = str_squish(Reason) # Supprime les espaces inutiles
+  ) %>%
+  filter(Reason != "") %>% # Retirer les vides
+  # Calculer nombre de raisons par Record.ID
+  group_by(Record.ID) %>%
+  mutate(
+    n_reasons = n(),
+    fraction = 1 / n_reasons
+  ) %>%
+  ungroup()
+
+
+# matcher avec les autres infos 
+rtw_reasons_long$doi <- paste0("https://doi.org/",rtw_reasons_long$OriginalPaperDOI)
+  
+rtw_reasons_long <- rtw_reasons_long %>%
+  left_join(oax_rtw_alpha_disc_gender, by = "doi")
+
+####
+
+# Sélectionner les bonnes colonnes et rendre unique
+rtw_reasons_analyse <- rtw_reasons_long %>%
+  select(id, doi, Reason, n_reasons, 
+         fraction, config, gender_corresponding,
+         is_sorted_alphabetically) %>%
+  unique()
+
+# 1. Calculer la part de chaque raison dans chaque configuration + tri alphabétique
+reason_by_config <- rtw_reasons_analyse %>%
+  filter(!is.na(config), !is.na(Reason), !is.na(is_sorted_alphabetically)) %>%
+  group_by(config, Reason, is_sorted_alphabetically) %>%
+  summarise(fraction_config = sum(fraction), .groups = "drop")
+
+# 2. Total des fractions par config + tri alphabétique
+total_by_config <- rtw_reasons_analyse %>%
+  filter(!is.na(config), !is.na(Reason), !is.na(is_sorted_alphabetically)) %>%
+  group_by(config, is_sorted_alphabetically) %>%
+  summarise(total_config = sum(fraction), .groups = "drop")
+
+# 3. Part de chaque raison dans chaque config triée
+reason_by_config <- reason_by_config %>%
+  left_join(total_by_config, by = c("config", "is_sorted_alphabetically")) %>%
+  mutate(part_config = fraction_config / total_config)
+
+# 4. Part globale de chaque raison, tri alphabétique respecté
+global_reason <- rtw_reasons_analyse %>%
+  filter(!is.na(config), !is.na(Reason), !is.na(is_sorted_alphabetically)) %>%
+  group_by(Reason, is_sorted_alphabetically) %>%
+  summarise(fraction_global = sum(fraction), .groups = "drop") %>%
+  group_by(is_sorted_alphabetically) %>% 
+  mutate(part_global = fraction_global / sum(fraction_global)) %>%
+  ungroup()
+
+# 5. Fusion pour obtenir le ratio de concentration
+final_concentration <- reason_by_config %>%
+  left_join(global_reason, by = c("Reason", "is_sorted_alphabetically")) %>%
+  mutate(ratio_concentration = part_config / part_global)
+
+# 6. Tri final pour lecture facile
+final_concentration <- final_concentration %>%
+  arrange(desc(ratio_concentration))
+
+
+write.xlsx(final_concentration, "raisons.xlsx")
