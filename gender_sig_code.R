@@ -64,18 +64,53 @@ get_last_name <- function(full_name) {
 }
 
 ##########################
+# final_df <- final_df %>%
+#   group_by(id) %>%
+#   mutate(
+#     last_name = get_last_name(au_display_name),  # Extraire le nom de famille
+#     is_sorted_alphabetically = all(order(last_name) == seq_along(last_name)),  # Vérifie l'ordre alphabétique
+#     num_authors = n()  # Nombre d'auteurs = nombre de lignes par ID
+#   ) %>%
+#   ungroup()  # Retirer les groupes
+
+library(dplyr)
+
 final_df <- final_df %>%
   group_by(id) %>%
   mutate(
-    last_name = get_last_name(au_display_name),  # Extraire le nom de famille
-    is_sorted_alphabetically = all(order(last_name) == seq_along(last_name)),  # Vérifie l'ordre alphabétique
-    num_authors = n()  # Nombre d'auteurs = nombre de lignes par ID
+    last_name = get_last_name(au_display_name),
+    num_authors = n(),  # Nombre d'auteurs
+    
+    is_alpha_az = all(order(last_name) == seq_along(last_name)),
+    is_alpha_za = all(order(last_name, decreasing = TRUE) == seq_along(last_name)),
+    
+    is_alpha_except_first = if (num_authors[1] >= 3) {
+      all(order(last_name[-1]) == seq_along(last_name[-1]))
+    } else {
+      FALSE
+    },
+    
+    is_alpha_except_last = if (num_authors[1] >= 3) {
+      all(order(last_name[-num_authors[1]]) == seq_along(last_name[-num_authors[1]]))
+    } else {
+      FALSE
+    },
+    
+    author_order_type = case_when(
+      is_alpha_az ~ "alpha_a_to_z",
+      is_alpha_za ~ "alpha_z_to_a",
+      is_alpha_except_first ~ "alpha_except_first",
+      is_alpha_except_last ~ "alpha_except_last",
+      TRUE ~ "not_alpha"
+    )
   ) %>%
-  ungroup()  # Retirer les groupes
+  ungroup()
+
+
 
 # extraire only les deux clonnes qui nous intéressent
 id_flag_alph <- final_df %>%
-  select(id, is_sorted_alphabetically, num_authors) %>%
+  select(id, author_order_type, num_authors) %>%
   distinct()
 
 # Ajouter les deux colonnes 
@@ -92,12 +127,12 @@ oax_rtw_alpha <- row_data %>%
 # Total           74774 100.0
 
 oax_rtw_alpha <- oax_rtw_alpha %>%
-  filter(!is.na(is_sorted_alphabetically))
+  filter(!is.na(author_order_type))
 
 # Tables inutiles désormais
 # rm(final_df, oax_rtw_alpha_na)
 
-saveRDS(oax_rtw_alpha, "oax_rtw_alpha.rds")
+saveRDS(oax_rtw_alpha, "oax_rtw_alphaV2.rds")
   
 #===================================
 # Table discipline + fractionnaire
@@ -229,7 +264,7 @@ total_per_disc <- alpha_disc_year %>%
 # 2. Données principales (TRUE seulement) + join avec total
 alpha_disc_year_plot <- alpha_disc_year %>%
   filter(is_sorted_alphabetically == TRUE 
-         & publication_year>1979
+         & publication_year>1950
          & publication_year<2025) %>%
   left_join(total_per_disc, by = "disc")
 
@@ -556,3 +591,66 @@ final_concentration <- final_concentration %>%
 
 
 write.xlsx(final_concentration, "raisons.xlsx")
+
+
+#######################
+
+config_alpha_order <- final_df %>%
+  select(id, author_order_type, is_alpha_az,
+         is_alpha_za, is_alpha_except_first,
+         is_alpha_except_last) %>%
+  unique()
+saveRDS(config_alpha_order, "config_alpha_order.rds")
+  
+oax_rtw_alpha_disc_gender$class_auth <- ifelse(oax_rtw_alpha_disc_gender$num_authors >10, ">=11", oax_rtw_alpha_disc_gender$num_authors)  
+  
+oax_rtw_alpha_disc_gender_config <- oax_rtw_alpha_disc_gender %>%
+  left_join(config_alpha_order, by = "id")
+
+
+saveRDS(oax_rtw_alpha_disc_gender_config, "oax_rtw_alpha_disc_gender_config.rds")
+oax_rtw_alpha_disc_gender_config <- readRDS("oax_rtw_alpha_disc_gender_config.rds")
+
+
+config_alpha_order <- oax_rtw_alpha_disc_gender_config %>%
+  select(id, author_order_type, class_auth, frac_disc, disc) %>%
+  unique()
+describe(config_alpha_order$author_order_type)
+
+library(dplyr)
+library(ggplot2)
+
+# 1. Préparer les données
+config_alpha_order_plot <- config_alpha_order %>%
+  group_by(disc, class_auth, author_order_type) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(disc, class_auth) %>%
+  mutate(
+    total = sum(n),
+    pct = (n / total) * 100
+  ) %>%
+  ungroup()
+
+## Réordonnancement de config_alpha_order_plot$class_auth
+config_alpha_order_plot$class_auth <- config_alpha_order_plot$class_auth %>%
+  fct_relevel(
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">=11"
+  )
+
+# 2. Plot : un graph par discipline
+ggplot(config_alpha_order_plot, aes(x = factor(class_auth), y = pct, fill = author_order_type)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent_format(scale = 100)) +
+  labs(
+    x = "Taille de l'équipe (class_auth)",
+    y = "% de configuration d'ordre",
+    fill = "Type d'ordre des auteurs",
+    title = "Répartition des configurations d'ordre selon la taille des équipes"
+  ) +
+  facet_wrap(~ disc, scales = "free_x") +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
