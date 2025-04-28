@@ -14,3 +14,7 @@ config_ratios.xlsx
 oax_rtw_alpha_disc_gender.rds
 table_analysis.xlsx
 raisons.xlsx
+UntitledR.R
+config_alpha_order.rds
+oax_rtw_alphaV2.rds
+oax_rtw_alpha_disc_gender_config.rds
