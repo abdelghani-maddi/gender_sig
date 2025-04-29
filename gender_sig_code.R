@@ -619,6 +619,7 @@ describe(config_alpha_order$author_order_type)
 
 library(dplyr)
 library(ggplot2)
+library(gtsummary)
 
 # 1. Préparer les données
 config_alpha_order_plot <- config_alpha_order %>%
@@ -654,3 +655,104 @@ ggplot(config_alpha_order_plot, aes(x = factor(class_auth), y = pct, fill = auth
     axis.text.x = element_text(angle = 45, hjust = 1)
   )
 
+
+# 1. Préparer les données
+config_alpha_order %>%
+  select(id, class_auth, author_order_type) %>%
+  unique() %>%
+  group_by(class_auth, author_order_type)
+  summarise(n = n(), .groups = "drop") 
+  
+  
+config_alpha_order_all <- oax_rtw_alpha_disc_gender_config %>%
+    select(id, author_order_type, class_auth, frac_disc) %>%
+    unique()  
+
+## Réordonnancement de config_alpha_order_plot$class_auth
+config_alpha_order_all$class_auth <- config_alpha_order_all$class_auth %>%
+  fct_relevel(
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">=11"
+  )
+config_alpha_order_all %>%
+  tbl_summary(
+    include = c(author_order_type, class_auth)
+  )
+
+## Réordonnancement de config_alpha_order_plot$class_auth
+config_alpha_order$class_auth <- config_alpha_order$class_auth %>%
+  fct_relevel(
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", ">=11"
+  )
+
+
+## Réordonnancement de config_alpha_order$author_order_type
+config_alpha_order$author_order_type <- config_alpha_order$author_order_type %>%
+  fct_relevel(
+    "alpha_a_to_z", "alpha_z_to_a", "alpha_except_first", "alpha_except_last",
+    "not_alpha"
+  )
+
+config_alpha_order %>%
+  tbl_summary(
+    include = c(disc, author_order_type),
+    by = class_auth
+  )
+
+
+
+config_alpha_order %>%
+  subset(!class_auth %in% "1")  %>%
+  tbl_summary(
+    include = c(disc),
+    by = author_order_type,
+    percent = "row"
+  ) %>%
+  add_overall(last = TRUE)
+
+
+config_alpha_order %>%
+  subset(!class_auth %in% "1")  %>%
+  tbl_summary(
+    include = c(disc, author_order_type),
+    by = class_auth,
+    percent = "row"
+  ) %>%
+  add_overall()
+
+
+library(dplyr)
+library(tidyr)
+
+# Supprimer class_auth == 1
+df <- config_alpha_order %>%
+  filter(class_auth != 1)
+
+# 1. Nombre de publications par discipline et type d'ordre
+counts_by_disc <- df %>%
+  group_by(disc, author_order_type) %>%
+  summarise(n = n(), .groups = "drop")
+
+# 2. Total par discipline pour calculer les parts locales
+parts_by_disc <- counts_by_disc %>%
+  group_by(disc) %>%
+  mutate(part_in_disc = n / sum(n)) %>%
+  ungroup()
+
+# 3. Part globale par type d'ordre
+parts_global <- df %>%
+  count(author_order_type, name = "n_global") %>%
+  mutate(global_part = n_global / sum(n_global))
+
+# 4. Joindre et calculer le double ratio
+double_ratio_df <- parts_by_disc %>%
+  left_join(parts_global, by = "author_order_type") %>%
+  mutate(double_ratio = part_in_disc / global_part)
+
+# 5. Optionnel : présentation sous forme large
+double_ratio_wide <- double_ratio_df %>%
+  select(disc, author_order_type, double_ratio) %>%
+  pivot_wider(names_from = author_order_type, values_from = double_ratio)
+
+double_ratio_wide
+
+write.xlsx(double_ratio_wide, "double_ratio_wide.xlsx")
