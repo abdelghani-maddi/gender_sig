@@ -756,3 +756,4 @@ double_ratio_wide <- double_ratio_df %>%
 double_ratio_wide
 
 write.xlsx(double_ratio_wide, "double_ratio_wide.xlsx")
+
